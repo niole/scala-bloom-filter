@@ -1,3 +1,6 @@
+import scala.util.hashing.{ MurmurHash3, ByteswapHashing, Hashing }
+import MurmurHash3.ArrayHashing
+
 /**
  * n elements
  * k hashing functions
@@ -6,13 +9,20 @@
  * how to size a bloom filter: minimize error rate given n, m, k values by adjusting them and then checking the error rate
  **/
 
+object Hasher extends Hashing[Array[Int]] {
+  def hash(number: Array[Int]): Int = number.hashCode
+}
+
 class BloomFilter(maxData: Int, errorRate: Double, totalHashFunctions: Int = 2) {
+  private val hashFunctions: Seq[(Int) => Int] = Seq((x: Int) => new ByteswapHashing[Int]().hash(x), (x: Int) => new ArrayHashing[Int]().hash(intToArray(x)))
 
   private[this] var set = init
 
   private[this] def getErrorRate(k: Double, n: Double, m: Double): Double = Math.pow((1.0-Math.exp(-k*n/m)), k)
 
-  private[this] def init: Seq[Int] = {
+  private def intToArray(n: Int): Array[Int] = n.toString.map(_.toInt).toArray
+
+  private[this] def init: Array[Int] = {
     var eRate = errorRate + 1
     var size = maxData - 10
 
@@ -21,16 +31,29 @@ class BloomFilter(maxData: Int, errorRate: Double, totalHashFunctions: Int = 2) 
      eRate = getErrorRate(totalHashFunctions, maxData, size)
     }
 
-    Seq.fill(size){ 0 }
+    Array.fill(size){ 0 }
 
   }
 
-  def get: Seq[Int] = set
+  def getAll: Seq[Int] = set
+
+  def add(number: Int): Unit = {
+
+    hashFunctions.foreach(f => {
+      set(Math.abs(f(number)) % set.length) = 1
+    })
+
+  }
+
+  def contains(number: Int): Boolean = hashFunctions.forall(f => set(Math.abs(f(number)) % set.length) == 1)
 
 }
 
 
 object Main extends App {
   val bf = new BloomFilter(100, .05)
-  println(bf.get)
+
+  bf.add(1234)
+
+  println(bf.contains(1234))
 }
